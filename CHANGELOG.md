@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.1.0] - 2026-06-13
+
+This release adopts four community contributions filed against the v3.0.0 cycle, each preserving the contributor as commit author. The Codex adapter gets the Stop-hook behavior fix that issue #178 asked for plus the PreCompact parity it was missing, the Pi extension gains a real test suite, and the SHA-cache documentation is corrected to the v3 path. With no v3 mode marker on disk the canonical hooks remain byte-identical to v2.43.0.
+
+### Fixed
+
+- **Codex Stop hook no longer blocks a normal stop on an incomplete plan** (PR #180 by @2023Anita, closes #178). `.codex/hooks/stop.py` previously emitted `{"decision": "block"}` on the first stop while phases were still pending and `stop_hook_active` was false, which pushed the Codex agent to continue into the next phase without the user asking. The conditional block path is removed: the adapter now emits a single advisory `systemMessage`, and `.codex/hooks/stop.sh` drops the imperative "continue working on the remaining phases" wording in favor of a plain progress-sync reminder. This matches the v3 design principle that an incomplete plan alone never blocks a stop. The standalone `.codex` Stop adapter performs only phase counting, with no attestation or tamper gate to preserve, so removing the block path is the complete fix for the reported behavior.
+- **SHA-cache documentation corrected to the v3 location** (PR #174 by @mvanhorn, closes #164). The new `docs/perf-notes.md` documents the attestation SHA cache: location priority, key derivation, container and CI behavior, and the clear command. A maintainer follow-up updated the documented path from the v2.40 `${TMPDIR:-/tmp}/pwf-sha` location to the v3 priority chain (`$XDG_CACHE_HOME/pwf-sha`, then `$HOME/.cache/pwf-sha`, then the `/tmp` fallback only when HOME is unset, per `scripts/inject-plan.sh`), corrected the clear command and the container premise, and clarified that the cache key is the first 16 hex characters of the SHA-256 of the plan file path. The canonical SKILL.md cross-link that repeated the stale `/tmp` path was fixed in the same pass.
+
+### Added
+
+- **Native Codex PreCompact hook** (PR #181 by @GongYuanCaiJi). The `.codex/hooks.json` lifecycle wiring declared every event except PreCompact, while the canonical SKILL.md has carried PreCompact since v3.0.0. This adds `.codex/hooks/pre-compact.sh` (POSIX sh, reuses `resolve-plan-dir.sh`, emits the same progress-flush reminder and `Plan-SHA256` line as the canonical hook), wires it into `.codex/hooks.json`, corrects the `docs/codex.md` hook table, and adds two targeted tests. This is parity for the native `hooks.json` route, not a new user-visible capability: the hook stays dormant on a runtime that never fires a PreCompact event, and the `|| true` wiring cannot break a session.
+- **Pi extension integration test suite** (PR #175 by @mvanhorn, closes #163). A TypeScript (vitest) suite under `.pi/skills/planning-with-files/extensions/planning-with-files/__tests__/` exercises all eight Pi lifecycle handlers, the four runtime modes (auto, parity, cache-safe, notify), and the SHA-256 attestation gate across match, mismatch, and invalid-hash cases. A maintainer follow-up aligned one parity-mode assertion with the runtime's lowercase injection banner in `runtime.ts`.
+
+### Changed
+
+- Version bumped to 3.1.0 across the 17 parity-locked files via `scripts/bump-version.py`. `.continue`, `.gemini`, `.pi`, and `.kiro` lag intentionally per AGENTS.md release scope.
+
+### Verification
+
+- Python suite: 180 passed, 4 skipped (the pre-existing Windows exec-bit and symlink-containment skips), 0 failed, up from 178 with the two new Codex PreCompact tests. `tests/test_codex_hooks.py` reports 9 passed.
+- The Pi extension vitest suite (PR #175) was added and statically reviewed against `runtime.ts` source, but was not executed in this release environment; `python -m pytest` does not run the `.test.ts` files. Run `npm install && npm test` inside `.pi/skills/planning-with-files/extensions/planning-with-files/` to execute it. The `package.json` is `private`, declares only `vitest`, `typescript`, and `@types/node` as devDependencies, and carries no install lifecycle scripts.
+- Supply-chain review of the two new shipped files: `.codex/hooks/pre-compact.sh` is POSIX sh with no network calls, no install hooks, and no writes outside the plan directory; `docs/perf-notes.md` is documentation only.
+
+### Thanks
+
+- @2023Anita for the Codex Stop hook fix (PR #180) that resolves the issue #178 auto-continuation complaint.
+- @GongYuanCaiJi for the native Codex PreCompact parity hook (PR #181).
+- @mvanhorn for the Pi extension integration test suite (PR #175, closes #163) and the SHA-cache documentation (PR #174, closes #164).
+
 ## [3.0.0] - 2026-06-10
 
 v3 targets long-running agentic runs on strong models (Opus 4.8, Fable 5, GPT 5.5 class). Everything new is opt-in. With no mode marker on disk, the hooks produce byte-identical v2.43.0 output: same delimiters, same raw progress tail, same advisory Stop behavior. Existing workflows need no changes.
